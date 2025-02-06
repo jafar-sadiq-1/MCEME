@@ -1,150 +1,141 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 
 const UsersAndRequestPage = () => {
-  // State to store users and requests
   const [users, setUsers] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
-  const [loadingRequests, setLoadingRequests] = useState(true);
-
-  const deleteUser = (id) => {
-    axios.delete(`http://localhost:5000/delete_user/${id}`)
-      .then(response => {
-        console.log('User deleted:', response.data);
-        // Perform additional actions here, e.g., remove user from state
-      })
-      .catch(error => {
-        console.error('Error deleting user:', error);
-      });
-      window.location.reload();
-  };
+  const [loading, setLoading] = useState(true);
+  const [editUserId, setEditUserId] = useState(null);
+  const [selectedRole, setSelectedRole] = useState("");
 
   useEffect(() => {
-    // Fetch Users
-    const fetchUsers = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get("http://localhost:5000/users");
-        setUsers(response.data);
+        const [usersRes, requestsRes] = await Promise.all([
+          axios.get("http://localhost:5000/users"),
+          axios.get("http://localhost:5000/user_approvals"),
+        ]);
+        setUsers(usersRes.data);
+        setRequests(requestsRes.data);
       } catch (err) {
-        console.error("Error fetching users:", err);
+        console.error("Error fetching data:", err);
       } finally {
-        setLoadingUsers(false);
+        setLoading(false);
       }
     };
-
-  
-
-
-
-
-    // Fetch Requests (Users needing approval)
-    const fetchRequests = async () => {
-      try {
-        const response = await axios.get("http://localhost:5000/user_approvals");
-        setRequests(response.data);
-      } catch (err) {
-        console.error("Error fetching requests:", err);
-      } finally {
-        setLoadingRequests(false);
-      }
-    };
-
-    fetchUsers();
-    fetchRequests();
+    fetchData();
   }, []);
 
-  // Handle request action
-  const handleRequestAction = (user, action) => {
-    if (action === "accept") {
-      axios.post("http://localhost:5000/add_users", user)
-        .then(() =>  console.log('accepted'))
-        .catch((err) => console.error("Error adding user:", err));
-    } else if (action === "reject") {
-     console.log('rejected');
+  const deleteUser = useCallback(async (id) => {
+    try {
+      await axios.delete(`http://localhost:5000/delete_user/${id}`);
+      setUsers((prevUsers) => prevUsers.filter((user) => user._id !== id));
+    } catch (error) {
+      console.error("Error deleting user:", error);
     }
-  
-    // Send a DELETE request to the backend
-    axios
-      .delete(`http://localhost:5000/delete_approval/${user._id}`)
-      .then(() => {
-        console.log(`Request ${user._id} deleted successfully from backend`);
-        window.location.reload(); // Reload the page
-      })
-      .catch((err) => {
-        console.error("Error deleting request:", err);
-      });
-  };
-  
+  }, []);
+
+  const updateUserRole = useCallback(async (id) => {
+    if (!selectedRole) return alert("Please select a role.");
+    try {
+      await axios.put(`http://localhost:5000/update_toggler/${id}`, { toggler: selectedRole });
+      setUsers((prevUsers) =>
+        prevUsers.map((user) => (user._id === id ? { ...user, toggler: selectedRole } : user))
+      );
+      setEditUserId(null);
+    } catch (error) {
+      console.error("Error updating role:", error);
+    }
+  }, [selectedRole]);
+
+  const handleRequestAction = useCallback(async (user, action) => {
+    try {
+      if (action === "accept") await axios.post("http://localhost:5000/add_users", user);
+      await axios.delete(`http://localhost:5000/delete_approval/${user._id}`);
+      setRequests((prevRequests) => prevRequests.filter((req) => req._id !== user._id));
+    } catch (error) {
+      console.error("Error handling request:", error);
+    }
+    window.location.reload();
+  }, []);
 
   return (
     <div className="p-4">
-      {/* Users Section */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-4 text-center text-blue-500">Users -  {users.length}</h2>
-        {loadingUsers ? (
-          <p>Loading users...</p>
-        ) : users.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {users.map((user) => (
-              <div key={user._id} className="border rounded-lg p-4 shadow hover:shadow-lg transition">
-                <p><strong>Username : </strong> {user.username}</p>
-                <p><strong>Full Name :</strong> {user.firstName} {user.middleName} {user.lastName}</p>
-                <p><strong>Designation :</strong> {user.designation}</p>
-                <p><strong>Email :</strong> {user.email}</p>
-                <p><strong>Mobile Number :</strong> {user.mobileNumber}</p>
-                <button
-  onClick={() => deleteUser(user._id)} // Pass the id to the deleteUser function
-  className="mt-4 ml-[70px] bg-red-500 border-2 items-center p-1 rounded-xl cursor-pointer hover:bg-red-600 text-white"
->
-  DELETE USER PERMANENTLY
-</button>
+      <h2 className="text-2xl font-bold mb-4 text-center text-blue-500">Users - {users.length}</h2>
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {users.map((user) => (
+            <div key={user._id} className="border rounded-lg p-4 shadow hover:shadow-lg transition">
+               <p><strong>Name :</strong> {user.firstName} {user.MiddleName} {user.lastName}</p>
+              <p><strong>User ID :</strong> {user.username}</p>
+              <p><strong>Email :</strong> {user.email}</p>
+              <p><strong>Mobile Number :</strong> {user.mobileNumber}</p>
+              <p><strong>Role :</strong> {user.toggler}</p>
+              <button
+                onClick={() => deleteUser(user._id)}
+                className="mt-2 bg-red-500 text-white p-2 rounded-lg hover:bg-red-600"
+              >Delete</button>
+              
+              <button
+                onClick={() => setEditUserId(user._id)}
+                className="ml-2 bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600"
+              >Update</button>
 
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500">No users available.</p>
-        )}
-      </div>
-
-      {/* Requests Section (Fetching Users from user_approvals API) */}
-      <div>
-        <h2 className="text-2xl font-bold mb-4 text-center text-blue-500">Requests - {requests.length}</h2>
-        {loadingRequests ? (
-          <p>Loading requests...</p>
-        ) : requests.length > 0 ? (
-          <ul className="space-y-4">
-            {requests.map((user) => (
-              <li key={user._id} className="border rounded-lg p-4 shadow hover:shadow-lg transition">
-                <p><strong>Name :</strong> {user.firstName} {user.middleName} {user.lastName}</p>
-                <p><strong>User_id :</strong> {user.username}</p>
-                <p><strong>Designation :</strong> {user.designation}</p>
-                <p><strong>Mobile :</strong> {user.mobileNumber}</p>
-                <p><strong>Email :</strong> {user.email}</p>
-
-                <div className="mt-2 space-x-2">
-                  <button
-                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition cursor-pointer"
-                    onClick={() => handleRequestAction(user,  "accept")}
+              {editUserId === user._id && (
+                <div className="mt-2">
+                  <select
+                    value={selectedRole}
+                    onChange={(e) => setSelectedRole(e.target.value)}
+                    className="border p-2 rounded-md"
                   >
-                    Accept
-                  </button>
+                    <option value="">Select Role</option>
+                    <option value="AE">AE</option>
+                    <option value="E">E</option>
+                    <option value="Viewer">Viewer</option>
+                    <option value="Clerk">Clerk</option>
+                  </select>
                   <button
-                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition cursor-pointer"
-                    onClick={() => handleRequestAction(user, "reject")}
-                  >
-                    Reject
-                  </button>
+                    onClick={() => updateUserRole(user._id)}
+                    className="ml-2 bg-green-500 text-white p-2 rounded-lg hover:bg-green-600"
+                  >Save</button>
                 </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p ></p>
-        )}
-      </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="text-2xl font-bold mt-6 mb-4 text-center text-blue-500">Requests - {requests.length}</h2>
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <ul className="space-y-4">
+          {requests.map((user) => (
+            <li key={user._id} className="border rounded-lg p-4 shadow hover:shadow-lg transition">
+              <p><strong>Name :</strong> {user.firstName} {user.MiddleName} {user.lastName}</p>
+              <p><strong>User ID :</strong> {user.username}</p>
+              <p><strong>Email :</strong> {user.email}</p>
+              <p><strong>Mobile Number :</strong> {user.mobileNumber}</p>
+              <p><strong>Role :</strong> {user.toggler}</p>
+
+              <div className="mt-2 space-x-2">
+                <button
+                  className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+                  onClick={() => handleRequestAction(user, "accept")}
+                >Accept</button>
+                <button
+                  className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
+                  onClick={() => handleRequestAction(user, "reject")}
+                >Reject</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };
+
 export default UsersAndRequestPage;

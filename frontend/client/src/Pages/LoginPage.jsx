@@ -1,7 +1,8 @@
+import { jwtDecode } from "jwt-decode";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaUser, FaLock, FaPhoneAlt, FaEnvelope, FaIdCard ,FaEye, FaEyeSlash } from "react-icons/fa"; // Import icons
+import { FaUser, FaLock, FaPhoneAlt, FaEnvelope, FaIdCard, FaEye, FaEyeSlash } from "react-icons/fa"; // Import icons
 import backgroundImage from "../assets/image.jpg";
 
 const LoginPage = () => {
@@ -20,7 +21,8 @@ const LoginPage = () => {
   const navigate = useNavigate();
 
   const isValidPassword = (password) =>
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(password);
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W).{8,}$/.test(password);
+
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -50,11 +52,9 @@ const LoginPage = () => {
         })
         .then((response) => {
           setMessage("Request sent successfully! After approval you can login. No need to signup again");
-          
           setIsSignUp(false); // Optionally switch to login form
         })
         .catch((error) => {
-         
           setMessage(`Error: ${error.response ? error.response.data.message : error.message}`);
         });
         setUsername("");
@@ -62,17 +62,33 @@ const LoginPage = () => {
     } else {
       // Handle login if necessary
       axios
-        .post("http://localhost:5000/login", { username, password })
-        .then(() => {
+      .post("http://localhost:5000/login", { username, password })
+      .then((response) => {
+         // Log the full response to check its structure
+        const token = response.data.token; // Assuming the response contains the token
+        if (token) {
+          localStorage.setItem("jwtToken", token);
+         //  // Store JWT token in localStorage
+         const decoded = jwtDecode(token);
+        // console.log(decoded);
           setMessage("Login successful!");
-          navigate("/home");
-        })
-        .catch((error) => {
-          setMessage(`Error: ${error.response.data.message}`);
-        });
+          
+          // Access the designation from the decoded token
+        //  console.log(decodedToken.designation);
+          navigate("/home"); // Redirect to home
+          window.location.reload();
+        } else {
+         
+          setMessage("No token received from server.");
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        setMessage(`Error: ${error.response ? error.response.data.message : error.message}`);
+      });
+    
     }
   };
-  
 
   return (
     <div
@@ -242,23 +258,23 @@ const LoginPage = () => {
               </div>
 
               <div className="relative mb-4 flex items-center">
-      <FaLock className="absolute left-3 text-gray-600" />
-      <input
-        type={showPassword ? "text" : "password"}
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-        className="w-full p-2 border rounded pl-10 pr-10 text-center"
-        required
-      />
-      <button
-        type="button"
-        className="absolute right-3 text-gray-600"
-        onClick={() => setShowPassword(!showPassword)}
-      >
-        {showPassword ? <FaEyeSlash /> : <FaEye />}
-      </button>
-    </div>
+                <FaLock className="absolute left-3 text-gray-600" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className="w-full p-2 border rounded pl-10 pr-10 text-center"
+                  required
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 text-gray-600"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <FaEyeSlash /> : <FaEye />}
+                </button>
+              </div>
 
               <div className="text-center mb-4">
                 <button
